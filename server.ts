@@ -4,6 +4,9 @@ import path from "path";
 import os from "os";
 import fs from "fs";
 import { createServer as http_create_server } from "http";
+import { Server, Socket } from "socket.io";
+import rdiff from "recursive-diff";
+import chokidar from "chokidar";
 
 var app = express();
 app.use(express.json({ limit: "50mb" }));
@@ -43,5 +46,33 @@ app.put("/change", (req: Request, res: Response) => {
 	res.end();
 });
 
-var restful_web_server = http_create_server(app);
-restful_web_server.listen(8000);
+var server = http_create_server(app);
+
+var ws_clients: { socket: Socket; cached_content: undefined | object }[] = [];
+var io = new Server(server, {
+	path: "/ws",
+	cors: {
+		origin: "*",
+		methods: ["GET", "POST"],
+	},
+	maxHttpBufferSize: 16e6,
+});
+
+function sync_clients() {
+	var data: object = JSON.parse(fs.readFileSync(store_path, "utf8"));
+	for (var i = 0; i < ws_clients.length; i++) {
+		if (data !== ws_clients[i].cached_content) {
+			ws_clients[i].socket.emit("data", rdiff.getDiff(ws_clients[i].cached_content, data));
+			ws_clients[i].cached_content = data;
+		}
+	}
+}
+chokidar.watch(store_path).on("all", (event, path) => {
+	sync_clients();
+});
+io.on("connection", (socket) => {
+	ws_clients.push({ socket, cached_content: undefined });
+	sync_clients();
+});
+
+server.listen(8000);

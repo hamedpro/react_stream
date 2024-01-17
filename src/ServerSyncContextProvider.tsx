@@ -8,12 +8,10 @@ import axios, { AxiosInstance } from "axios";
 
 export function ServerSyncContextProvider<data extends object>({
 	children,
-	websocket_endpoint,
-	restful_endpoint,
+	server_endpoint,
 }: {
 	children: ReactNode;
-	websocket_endpoint: string;
-	restful_endpoint: string;
+	server_endpoint: string;
 }) {
 	var [data, set_data] = useState<data | undefined>(undefined);
 	var set_data_ref = useRef(set_data);
@@ -21,17 +19,21 @@ export function ServerSyncContextProvider<data extends object>({
 
 	// Create an instance of axios with baseUrl set to restful_endpoint
 	const axiosInstance: AxiosInstance = axios.create({
-		baseURL: restful_endpoint,
+		baseURL: server_endpoint,
 	});
 
 	async function update_server(jsonPath: string[], newData: any) {
-		return await axiosInstance.put(restful_endpoint, {
-			json_path: jsonPath,
-			new_data: newData,
+		return await axiosInstance({
+			data: {
+				json_path: jsonPath,
+				new_data: newData,
+			},
+			method: "put",
+			url: "/change",
 		});
 	}
 	useEffect(() => {
-		var websocket = io(websocket_endpoint);
+		var websocket = io(new URL("/ws", server_endpoint).href);
 		websocket.on("data", (diff) => {
 			set_data_ref.current((prev) => {
 				var clone = prev !== undefined ? deep_copy(prev) : undefined;
