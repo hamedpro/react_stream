@@ -35,7 +35,7 @@ export function ServerSyncContextProvider({ children, server_endpoint, }) {
         });
     }
     useEffect(() => {
-        var websocket = io(new URL("/ws", server_endpoint).href);
+        var websocket = io(server_endpoint, { path: "/ws" });
         websocket.on("data", (diff) => {
             set_data_ref.current((prev) => {
                 var clone = prev !== undefined ? deep_copy(prev) : undefined;
