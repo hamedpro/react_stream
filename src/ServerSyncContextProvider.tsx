@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useRef, useState } from "react";
 import { ServerSyncContext } from "./ServerSyncContext";
 import { io } from "socket.io-client";
 import { applyDiff } from "recursive-diff";
-import { deep_copy } from "../utils";
+import { deep_copy } from "./utils";
 
 import axios, { AxiosInstance } from "axios";
 
