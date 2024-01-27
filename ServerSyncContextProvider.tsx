@@ -13,6 +13,17 @@ export function ServerSyncContextProvider({
 	children: ReactNode;
 	server_endpoint: string;
 }) {
+	var [virtual_localstorage, set_virtual_localstorage] = useState(() => {
+		if (localStorage.getItem("virtual_localstorage") === null) {
+			localStorage.setItem("virtual_localstorage", JSON.stringify({}));
+		}
+		return localStorage.getItem("virtual_localstorage")!;
+	});
+
+	useEffect(() => {
+		localStorage.setItem("virtual_localstorage", virtual_localstorage);
+	}, [virtual_localstorage]);
+
 	var [data, set_data] = useState<store_standard_type | undefined>(undefined);
 	var set_data_ref = useRef(set_data);
 	set_data_ref.current = set_data;
@@ -64,7 +75,13 @@ export function ServerSyncContextProvider({
 
 	return (
 		<ServerSyncContext.Provider
-			value={{ data, server_post_verb, server_put_verb }}
+			value={{
+				data,
+				server_post_verb,
+				server_put_verb,
+				set_virtual_localstorage,
+				parsed_virtual_localstorage: JSON.parse(virtual_localstorage),
+			}}
 			children={children}
 		/>
 	);
