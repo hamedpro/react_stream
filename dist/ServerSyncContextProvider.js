@@ -11,8 +11,8 @@ import { jsx as _jsx } from "react/jsx-runtime";
 import { useEffect, useRef, useState } from "react";
 import { ServerSyncContext } from "./ServerSyncContext";
 import { io } from "socket.io-client";
-import { applyDiff } from "recursive-diff";
-import { deep_copy } from "./utils";
+import rdiff, { applyDiff } from "recursive-diff";
+import { custom_sha256_hash, deep_copy } from "./utils";
 import axios from "axios";
 export function ServerSyncContextProvider({ children, server_endpoint, }) {
     var [data, set_data] = useState(undefined);
@@ -22,7 +22,7 @@ export function ServerSyncContextProvider({ children, server_endpoint, }) {
     const axiosInstance = axios.create({
         baseURL: server_endpoint,
     });
-    function update_server(jsonPath, newData) {
+    function server_put_verb(jsonPath, newData) {
         return __awaiter(this, void 0, void 0, function* () {
             return yield axiosInstance({
                 data: {
@@ -30,6 +30,23 @@ export function ServerSyncContextProvider({ children, server_endpoint, }) {
                     new_data: newData,
                 },
                 method: "put",
+                url: "/change",
+            });
+        });
+    }
+    function server_post_verb(modifier) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var clone = deep_copy(data);
+            if (clone === undefined) {
+                throw new Error("data is not defined yet to be modified.");
+            }
+            modifier(clone);
+            return yield axiosInstance({
+                data: {
+                    diff: rdiff.getDiff(data, clone),
+                    hash: custom_sha256_hash(data),
+                },
+                method: "post",
                 url: "/change",
             });
         });
@@ -47,5 +64,5 @@ export function ServerSyncContextProvider({ children, server_endpoint, }) {
     if (data === undefined) {
         return "first sync with server is not finished yet.";
     }
-    return (_jsx(ServerSyncContext.Provider, { value: { data, update_server }, children: children }));
+    return (_jsx(ServerSyncContext.Provider, { value: { data, server_post_verb, server_put_verb }, children: children }));
 }

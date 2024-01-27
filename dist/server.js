@@ -7,6 +7,7 @@ import { createServer as http_create_server } from "http";
 import { Server } from "socket.io";
 import rdiff from "recursive-diff";
 import chokidar from "chokidar";
+import { custom_sha256_hash } from "./utils";
 var app = express();
 app.use(express.json({ limit: "50mb" }));
 app.use(cors());
@@ -23,17 +24,29 @@ function write_data(data) {
 app.put("/change", (req, res) => {
     const { json_path, new_data } = req.body;
     const data = read_data();
-    let currentData = data;
+    let pointer = data;
     for (let i = 0; i < json_path.length - 1; i++) {
         const key = json_path[i];
-        if (currentData[key] === undefined) {
-            currentData[key] = {};
+        if (pointer[key] === undefined) {
+            pointer[key] = {};
         }
-        currentData = currentData[key];
+        pointer = pointer[key];
     }
     const lastKey = json_path[json_path.length - 1];
-    currentData[lastKey] = new_data;
-    write_data(currentData);
+    pointer[lastKey] = new_data;
+    write_data(data);
+    res.end();
+});
+app.post("/change", (req, res) => {
+    const { diff, hash, } = req.body;
+    const data = read_data();
+    if (hash !== custom_sha256_hash(data)) {
+        /* this hash check is to make sure that the
+        client is not sending a diff that is based on outdated data */
+        res.status(400).json("Hash mismatch");
+        return;
+    }
+    write_data(rdiff.applyDiff(data, diff));
     res.end();
 });
 var server = http_create_server(app);
@@ -47,7 +60,7 @@ var io = new Server(server, {
     maxHttpBufferSize: 16e6,
 });
 function sync_clients() {
-    var data = JSON.parse(fs.readFileSync(store_path, "utf8"));
+    var data = read_data();
     for (var i = 0; i < ws_clients.length; i++) {
         if (data !== ws_clients[i].cached_content) {
             ws_clients[i].socket.emit("data", rdiff.getDiff(ws_clients[i].cached_content, data));
