@@ -15,6 +15,15 @@ import rdiff, { applyDiff } from "recursive-diff";
 import { custom_sha256_hash, deep_copy } from "./utils";
 import axios from "axios";
 export function ServerSyncContextProvider({ children, server_endpoint, }) {
+    var [virtual_localstorage, set_virtual_localstorage] = useState(() => {
+        if (localStorage.getItem("virtual_localstorage") === null) {
+            localStorage.setItem("virtual_localstorage", JSON.stringify({}));
+        }
+        return localStorage.getItem("virtual_localstorage");
+    });
+    useEffect(() => {
+        localStorage.setItem("virtual_localstorage", virtual_localstorage);
+    }, [virtual_localstorage]);
     var [data, set_data] = useState(undefined);
     var set_data_ref = useRef(set_data);
     set_data_ref.current = set_data;
@@ -64,5 +73,11 @@ export function ServerSyncContextProvider({ children, server_endpoint, }) {
     if (data === undefined) {
         return "first sync with server is not finished yet.";
     }
-    return (_jsx(ServerSyncContext.Provider, { value: { data, server_post_verb, server_put_verb }, children: children }));
+    return (_jsx(ServerSyncContext.Provider, { value: {
+            data,
+            server_post_verb,
+            server_put_verb,
+            set_virtual_localstorage,
+            parsed_virtual_localstorage: JSON.parse(virtual_localstorage),
+        }, children: children }));
 }

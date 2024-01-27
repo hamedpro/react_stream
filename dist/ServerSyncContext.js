@@ -7,4 +7,8 @@ export const ServerSyncContext = createContext({
     server_put_verb: () => {
         throw new Error("this function not implemented in context default value");
     },
+    parsed_virtual_localstorage: {},
+    set_virtual_localstorage: () => {
+        throw new Error("this function not implemented in context default value");
+    },
 });
