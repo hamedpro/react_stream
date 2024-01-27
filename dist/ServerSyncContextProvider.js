@@ -31,25 +31,13 @@ export function ServerSyncContextProvider({ children, server_endpoint, }) {
     const axiosInstance = axios.create({
         baseURL: server_endpoint,
     });
-    function server_put_verb(jsonPath, newData) {
-        return __awaiter(this, void 0, void 0, function* () {
-            return yield axiosInstance({
-                data: {
-                    json_path: jsonPath,
-                    new_data: newData,
-                },
-                method: "put",
-                url: "/change",
-            });
-        });
-    }
     function server_post_verb(modifier) {
         return __awaiter(this, void 0, void 0, function* () {
             var clone = deep_copy(data);
             if (clone === undefined) {
                 throw new Error("data is not defined yet to be modified.");
             }
-            modifier(clone);
+            modifier(clone, Math.max(...clone.map((item) => item[0])));
             return yield axiosInstance({
                 data: {
                     diff: rdiff.getDiff(data, clone),
@@ -76,7 +64,6 @@ export function ServerSyncContextProvider({ children, server_endpoint, }) {
     return (_jsx(ServerSyncContext.Provider, { value: {
             data,
             server_post_verb,
-            server_put_verb,
             set_virtual_localstorage,
             parsed_virtual_localstorage: JSON.parse(virtual_localstorage),
         }, children: children }));

@@ -33,22 +33,14 @@ export function ServerSyncContextProvider({
 		baseURL: server_endpoint,
 	});
 
-	async function server_put_verb(jsonPath: rdiff.rdiffResult["path"], newData: any) {
-		return await axiosInstance({
-			data: {
-				json_path: jsonPath,
-				new_data: newData,
-			},
-			method: "put",
-			url: "/change",
-		});
-	}
-	async function server_post_verb(modifier: (data: store_standard_type) => void) {
+	async function server_post_verb(
+		modifier: (data: store_standard_type, max_existing_id: number) => void
+	) {
 		var clone = deep_copy(data);
 		if (clone === undefined) {
 			throw new Error("data is not defined yet to be modified.");
 		}
-		modifier(clone);
+		modifier(clone, Math.max(...clone.map((item) => item[0])));
 		return await axiosInstance({
 			data: {
 				diff: rdiff.getDiff(data, clone),
@@ -78,7 +70,7 @@ export function ServerSyncContextProvider({
 			value={{
 				data,
 				server_post_verb,
-				server_put_verb,
+
 				set_virtual_localstorage,
 				parsed_virtual_localstorage: JSON.parse(virtual_localstorage),
 			}}

@@ -12,4 +12,4 @@ export function custom_sha256_hash(input: any): string {
 	const hash = SHA256(inputString).toString();
 	return hash;
 }
-export type store_standard_type = { [key: string]: any };
+export type store_standard_type = [id: number, type: string, value: any][];

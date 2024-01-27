@@ -21,22 +21,6 @@ function read_data() {
 function write_data(data) {
     fs.writeFileSync(store_path, JSON.stringify(data, undefined, 4));
 }
-app.put("/change", (req, res) => {
-    const { json_path, new_data } = req.body;
-    const data = read_data();
-    let pointer = data;
-    for (let i = 0; i < json_path.length - 1; i++) {
-        const key = json_path[i];
-        if (pointer[key] === undefined) {
-            pointer[key] = {};
-        }
-        pointer = pointer[key];
-    }
-    const lastKey = json_path[json_path.length - 1];
-    pointer[lastKey] = new_data;
-    write_data(data);
-    res.end();
-});
 app.post("/change", (req, res) => {
     const { diff, hash, } = req.body;
     const data = read_data();
