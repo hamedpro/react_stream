@@ -1,19 +1,19 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { ServerSyncContext } from "./ServerSyncContext";
 import { io } from "socket.io-client";
-import { applyDiff } from "recursive-diff";
-import { deep_copy } from "./utils";
+import rdiff, { applyDiff } from "recursive-diff";
+import { custom_sha256_hash, deep_copy, store_standard_type } from "./utils";
 
 import axios, { AxiosInstance } from "axios";
 
-export function ServerSyncContextProvider<data extends object>({
+export function ServerSyncContextProvider({
 	children,
 	server_endpoint,
 }: {
 	children: ReactNode;
 	server_endpoint: string;
 }) {
-	var [data, set_data] = useState<data | undefined>(undefined);
+	var [data, set_data] = useState<store_standard_type | undefined>(undefined);
 	var set_data_ref = useRef(set_data);
 	set_data_ref.current = set_data;
 
@@ -22,13 +22,28 @@ export function ServerSyncContextProvider<data extends object>({
 		baseURL: server_endpoint,
 	});
 
-	async function update_server(jsonPath: string[], newData: any) {
+	async function server_put_verb(jsonPath: rdiff.rdiffResult["path"], newData: any) {
 		return await axiosInstance({
 			data: {
 				json_path: jsonPath,
 				new_data: newData,
 			},
 			method: "put",
+			url: "/change",
+		});
+	}
+	async function server_post_verb(modifier: (data: store_standard_type) => void) {
+		var clone = deep_copy(data);
+		if (clone === undefined) {
+			throw new Error("data is not defined yet to be modified.");
+		}
+		modifier(clone);
+		return await axiosInstance({
+			data: {
+				diff: rdiff.getDiff(data, clone),
+				hash: custom_sha256_hash(data),
+			},
+			method: "post",
 			url: "/change",
 		});
 	}
@@ -49,7 +64,7 @@ export function ServerSyncContextProvider<data extends object>({
 
 	return (
 		<ServerSyncContext.Provider
-			value={{ data, update_server }} // Pass axiosInstance in the value of the context
+			value={{ data, server_post_verb, server_put_verb }}
 			children={children}
 		/>
 	);

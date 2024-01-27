@@ -7,6 +7,7 @@ import { createServer as http_create_server } from "http";
 import { Server, Socket } from "socket.io";
 import rdiff from "recursive-diff";
 import chokidar from "chokidar";
+import { custom_sha256_hash, store_standard_type } from "./utils";
 
 var app = express();
 app.use(express.json({ limit: "50mb" }));
@@ -17,38 +18,56 @@ if (fs.existsSync(store_path) === false) {
 	fs.writeFileSync(store_path, JSON.stringify({}));
 }
 
-function read_data(): object {
+function read_data(): store_standard_type {
 	return JSON.parse(fs.readFileSync(store_path, "utf-8"));
 }
 
-function write_data(data: object): void {
+function write_data(data: store_standard_type): void {
 	fs.writeFileSync(store_path, JSON.stringify(data, undefined, 4));
 }
 
 app.put("/change", (req: Request, res: Response) => {
-	const { json_path, new_data } = req.body;
+	const { json_path, new_data }: { json_path: rdiff.rdiffResult["path"]; new_data: any } =
+		req.body;
 
 	const data = read_data();
 
-	let currentData: { [key: string]: any } = data;
+	let pointer = data;
 	for (let i = 0; i < json_path.length - 1; i++) {
 		const key = json_path[i];
-		if (currentData[key] === undefined) {
-			currentData[key] = {};
+		if (pointer[key] === undefined) {
+			pointer[key] = {};
 		}
-		currentData = currentData[key];
+		pointer = pointer[key];
 	}
 	const lastKey = json_path[json_path.length - 1];
-	currentData[lastKey] = new_data;
+	pointer[lastKey] = new_data;
 
-	write_data(currentData);
+	write_data(data);
 
 	res.end();
 });
+app.post("/change", (req: Request, res: Response) => {
+	const {
+		diff,
+		hash,
+	}: { diff: rdiff.rdiffResult[]; hash: ReturnType<typeof custom_sha256_hash> } = req.body;
 
+	const data = read_data();
+	if (hash !== custom_sha256_hash(data)) {
+		/* this hash check is to make sure that the
+		client is not sending a diff that is based on outdated data */
+		res.status(400).json("Hash mismatch");
+		return;
+	}
+
+	write_data(rdiff.applyDiff(data, diff));
+
+	res.end();
+});
 var server = http_create_server(app);
 
-var ws_clients: { socket: Socket; cached_content: undefined | object }[] = [];
+var ws_clients: { socket: Socket; cached_content: undefined | store_standard_type }[] = [];
 var io = new Server(server, {
 	path: "/ws",
 	cors: {
@@ -59,7 +78,7 @@ var io = new Server(server, {
 });
 
 function sync_clients() {
-	var data: object = JSON.parse(fs.readFileSync(store_path, "utf8"));
+	var data = read_data();
 	for (var i = 0; i < ws_clients.length; i++) {
 		if (data !== ws_clients[i].cached_content) {
 			ws_clients[i].socket.emit("data", rdiff.getDiff(ws_clients[i].cached_content, data));
