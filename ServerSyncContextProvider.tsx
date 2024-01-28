@@ -70,9 +70,9 @@ export function ServerSyncContextProvider({
 			value={{
 				data,
 				server_post_verb,
-
 				set_virtual_localstorage,
 				parsed_virtual_localstorage: JSON.parse(virtual_localstorage),
+				custom_axios: axiosInstance,
 			}}
 			children={children}
 		/>

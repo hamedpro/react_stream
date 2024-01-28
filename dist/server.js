@@ -1,3 +1,12 @@
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 import express from "express";
 import cors from "cors";
 import path from "path";
@@ -8,6 +17,7 @@ import { Server } from "socket.io";
 import rdiff from "recursive-diff";
 import chokidar from "chokidar";
 import { custom_sha256_hash } from "./utils";
+import formidable from "formidable";
 var app = express();
 app.use(express.json({ limit: "50mb" }));
 app.use(cors());
@@ -32,6 +42,51 @@ app.post("/change", (req, res) => {
     }
     write_data(rdiff.applyDiff(data, diff));
     res.end();
+});
+app.post("/files", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const uploadsDir = path.resolve(os.homedir(), "uploads");
+    var new_file_id;
+    if (fs.readdirSync(uploadsDir).length === 0) {
+        new_file_id = 1;
+    }
+    else {
+        new_file_id =
+            Math.max(...fs.readdirSync(uploadsDir).map((filenname) => Number(filenname.split(".")[0]))) + 1;
+    }
+    var f = formidable({
+        uploadDir: path.resolve(os.homedir(), "uploads"),
+    });
+    f.parse(req, (err, fields, files) => {
+        var _a;
+        if (err) {
+            res.status(400).json({ error: err });
+            return;
+        }
+        var file = (_a = files["file"]) === null || _a === void 0 ? void 0 : _a[0];
+        if (file === undefined) {
+            res.status(400).json({ error: "No file" });
+            return;
+        }
+        var old_file_path = file.filepath;
+        if (!file.originalFilename) {
+            res.status(400).json({ error: "No filename" });
+            return;
+        }
+        var new_file_path = path.join(uploadsDir, `${new_file_id}.${file.originalFilename.split(".").pop()}`);
+        fs.renameSync(old_file_path, new_file_path);
+        res.json({ new_file_id });
+    });
+}));
+app.get("/files/:file_id", (req, res) => {
+    var file_id = req.params.file_id;
+    var filename = fs
+        .readdirSync(path.join(os.homedir(), "uploads"))
+        .find((filename) => filename.startsWith(file_id));
+    if (filename === undefined) {
+        res.status(404).json({ error: "File not found" });
+        return;
+    }
+    res.sendFile(path.resolve(os.homedir(), "uploads", filename));
 });
 var server = http_create_server(app);
 var ws_clients = [];

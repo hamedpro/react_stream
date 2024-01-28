@@ -1,4 +1,4 @@
-import express, { Request, Response } from "express";
+import express, { Request, Response, response } from "express";
 import cors from "cors";
 import path from "path";
 import os from "os";
@@ -8,7 +8,7 @@ import { Server, Socket } from "socket.io";
 import rdiff from "recursive-diff";
 import chokidar from "chokidar";
 import { custom_sha256_hash, store_standard_type } from "./utils";
-
+import formidable from "formidable";
 var app = express();
 app.use(express.json({ limit: "50mb" }));
 app.use(cors());
@@ -43,6 +43,55 @@ app.post("/change", (req: Request, res: Response) => {
 	write_data(rdiff.applyDiff(data, diff));
 
 	res.end();
+});
+app.post("/files", async (req: Request, res: Response) => {
+	const uploadsDir = path.resolve(os.homedir(), "uploads");
+	var new_file_id: number;
+	if (fs.readdirSync(uploadsDir).length === 0) {
+		new_file_id = 1;
+	} else {
+		new_file_id =
+			Math.max(
+				...fs.readdirSync(uploadsDir).map((filenname) => Number(filenname.split(".")[0]))
+			) + 1;
+	}
+
+	var f = formidable({
+		uploadDir: path.resolve(os.homedir(), "uploads"),
+	});
+	f.parse(req, (err, fields, files) => {
+		if (err) {
+			res.status(400).json({ error: err });
+			return;
+		}
+		var file = files["file"]?.[0];
+		if (file === undefined) {
+			res.status(400).json({ error: "No file" });
+			return;
+		}
+		var old_file_path = file.filepath;
+		if (!file.originalFilename) {
+			res.status(400).json({ error: "No filename" });
+			return;
+		}
+		var new_file_path = path.join(
+			uploadsDir,
+			`${new_file_id}.${file.originalFilename.split(".").pop()}`
+		);
+		fs.renameSync(old_file_path, new_file_path);
+		res.json({ new_file_id });
+	});
+});
+app.get("/files/:file_id", (req: Request, res: Response) => {
+	var file_id = req.params.file_id;
+	var filename = fs
+		.readdirSync(path.join(os.homedir(), "uploads"))
+		.find((filename) => filename.startsWith(file_id));
+	if (filename === undefined) {
+		res.status(404).json({ error: "File not found" });
+		return;
+	}
+	res.sendFile(path.resolve(os.homedir(), "uploads", filename));
 });
 var server = http_create_server(app);
 
