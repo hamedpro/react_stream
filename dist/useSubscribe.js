@@ -10,7 +10,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 import { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import rdiff, { applyDiff } from "recursive-diff";
-import { custom_sha256_hash, deep_copy } from "./utils";
+import { custom_sha256_hash, deep_copy, } from "./utils";
 import axios from "axios";
 export function useSubscribe({ subscribe_to, server_endpoint, }) {
     var [data, set_data] = useState(undefined);
@@ -29,6 +29,7 @@ export function useSubscribe({ subscribe_to, server_endpoint, }) {
                 throw new Error("i dont have data of this item cached yet so i can not do any modification on it.");
             }
             var clone = deep_copy(data);
+            // type of data can not be undefined or store_standard_type here
             var modified = modifier(clone);
             var custom_axios = axios.create({ baseURL: server_endpoint });
             return yield custom_axios({

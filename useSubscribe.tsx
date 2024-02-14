@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import rdiff, { applyDiff } from "recursive-diff";
-import { custom_sha256_hash, deep_copy, store_standard_type_item } from "./utils";
+import {
+	custom_sha256_hash,
+	deep_copy,
+	store_standard_type,
+	store_standard_type_item,
+} from "./utils";
 
 import axios, { AxiosInstance } from "axios";
 
@@ -12,7 +17,9 @@ export function useSubscribe({
 	subscribe_to: number | "*";
 	server_endpoint: string;
 }) {
-	var [data, set_data] = useState<store_standard_type_item | undefined>(undefined);
+	var [data, set_data] = useState<store_standard_type_item | store_standard_type | undefined>(
+		undefined
+	);
 	var set_data_ref = useRef(set_data);
 	set_data_ref.current = set_data;
 
@@ -33,7 +40,8 @@ export function useSubscribe({
 
 		var clone = deep_copy(data);
 
-		var modified = modifier(clone);
+		// type of data can not be undefined or store_standard_type here
+		var modified = modifier(clone as store_standard_type_item);
 		var custom_axios = axios.create({ baseURL: server_endpoint });
 		return await custom_axios({
 			data: {
