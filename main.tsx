@@ -1,8 +1,25 @@
 import { createRoot } from "react-dom/client";
-import { App } from "./App";
-import { ServerSyncContextProvider } from "./ServerSyncContextProvider";
+import { Root } from "./Root";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { AllItems } from "./AllItems";
+import { Item } from "./Item";
 createRoot(document.getElementById("root")!).render(
-	<ServerSyncContextProvider server_endpoint="http://localhost:8000">
-		<App />
-	</ServerSyncContextProvider>
+	<>
+		<BrowserRouter>
+			<Routes>
+				<Route
+					path="/"
+					element={<Root />}
+				/>
+				<Route
+					path="/items"
+					element={<AllItems />}
+				/>
+				<Route
+					path="/items/:item_id"
+					element={<Item />}
+				/>
+			</Routes>
+		</BrowserRouter>
+	</>
 );

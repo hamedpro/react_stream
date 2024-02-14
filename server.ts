@@ -7,7 +7,7 @@ import { createServer as http_create_server } from "http";
 import { Server, Socket } from "socket.io";
 import rdiff from "recursive-diff";
 import chokidar from "chokidar";
-import { custom_sha256_hash, store_standard_type } from "./utils";
+import { custom_sha256_hash, store_standard_type, store_standard_type_item } from "./utils";
 import formidable from "formidable";
 var app = express();
 app.use(express.json({ limit: "50mb" }));
@@ -25,22 +25,49 @@ function read_data(): store_standard_type {
 function write_data(data: store_standard_type): void {
 	fs.writeFileSync(store_path, JSON.stringify(data, undefined, 4));
 }
-
-app.post("/change", (req: Request, res: Response) => {
+app.post("/items", (req: Request, res: Response) => {
+	const {
+		type,
+		value,
+	}: { type: store_standard_type_item[1]; value: store_standard_type_item[2] } = req.body;
+	var data = read_data();
+	var new_item_id: number = data.length + 1;
+	write_data([...data, [new_item_id, type, value] as store_standard_type_item]);
+	res.json({ new_item_id });
+});
+app.put("/items/:id", (req: Request, res: Response) => {
 	const {
 		diff,
 		hash,
-	}: { diff: rdiff.rdiffResult[]; hash: ReturnType<typeof custom_sha256_hash> } = req.body;
-
-	const data = read_data();
-	if (hash !== custom_sha256_hash(data)) {
+	}: {
+		diff: rdiff.rdiffResult[];
+		hash: ReturnType<typeof custom_sha256_hash>;
+	} = req.body;
+	const item_id = Number(req.params.id);
+	var data = read_data();
+	var pointer: store_standard_type_item | undefined = data.find(
+		([id, type, value]) => id === item_id
+	);
+	if (pointer === undefined) {
+		res.status(404).json("could not find an item with that id");
+		return;
+	}
+	if (hash !== custom_sha256_hash(pointer)) {
 		/* this hash check is to make sure that the
 		client is not sending a diff that is based on outdated data */
 		res.status(400).json("Hash mismatch");
 		return;
 	}
 
-	write_data(rdiff.applyDiff(data, diff));
+	var pointer = rdiff.applyDiff(pointer, diff) as store_standard_type_item | undefined;
+	if (pointer === undefined) {
+		res.status(400).json(
+			"invalid change operation: applying this change makes this item undefined "
+		);
+		return;
+	}
+
+	write_data([...data.filter(([id, type, value]) => id !== item_id), pointer]);
 
 	res.end();
 });
@@ -95,7 +122,11 @@ app.get("/files/:file_id", (req: Request, res: Response) => {
 });
 var server = http_create_server(app);
 
-var ws_clients: { socket: Socket; cached_content: undefined | store_standard_type }[] = [];
+var ws_clients: {
+	socket: Socket;
+	cached_content: undefined | store_standard_type;
+	subscribed_item: number | "*";
+}[] = [];
 var io = new Server(server, {
 	path: "/ws",
 	cors: {
@@ -105,21 +136,31 @@ var io = new Server(server, {
 	maxHttpBufferSize: 16e6,
 });
 
-function sync_clients() {
+function sync_subscriptions() {
 	var data = read_data();
+
 	for (var i = 0; i < ws_clients.length; i++) {
-		if (data !== ws_clients[i].cached_content) {
-			ws_clients[i].socket.emit("data", rdiff.getDiff(ws_clients[i].cached_content, data));
-			ws_clients[i].cached_content = data;
+		var pointer_to_subscribed_item =
+			ws_clients[i].subscribed_item === "*"
+				? data
+				: data.find(([id, type, value]) => id === ws_clients[i].subscribed_item);
+		if (pointer_to_subscribed_item !== ws_clients[i].cached_content) {
+			ws_clients[i].socket.emit(
+				"data",
+				rdiff.getDiff(ws_clients[i].cached_content, pointer_to_subscribed_item)
+			);
+			ws_clients[i].cached_content = pointer_to_subscribed_item;
 		}
 	}
 }
 chokidar.watch(store_path).on("all", (event, path) => {
-	sync_clients();
+	sync_subscriptions();
 });
 io.on("connection", (socket) => {
-	ws_clients.push({ socket, cached_content: undefined });
-	sync_clients();
+	socket.on("subscribe_to_item", (subscribed_item: "*" | number) => {
+		ws_clients.push({ socket, cached_content: undefined, subscribed_item: subscribed_item });
+		sync_subscriptions();
+	});
 });
 
 server.listen(8000);
