@@ -31,16 +31,34 @@ function read_data() {
 function write_data(data) {
     fs.writeFileSync(store_path, JSON.stringify(data, undefined, 4));
 }
-app.post("/change", (req, res) => {
+app.post("/items", (req, res) => {
+    const { type, value, } = req.body;
+    var data = read_data();
+    var new_item_id = data.length + 1;
+    write_data([...data, [new_item_id, type, value]]);
+    res.json({ new_item_id });
+});
+app.put("/items/:id", (req, res) => {
     const { diff, hash, } = req.body;
-    const data = read_data();
-    if (hash !== custom_sha256_hash(data)) {
+    const item_id = Number(req.params.id);
+    var data = read_data();
+    var pointer = data.find(([id, type, value]) => id === item_id);
+    if (pointer === undefined) {
+        res.status(404).json("could not find an item with that id");
+        return;
+    }
+    if (hash !== custom_sha256_hash(pointer)) {
         /* this hash check is to make sure that the
         client is not sending a diff that is based on outdated data */
         res.status(400).json("Hash mismatch");
         return;
     }
-    write_data(rdiff.applyDiff(data, diff));
+    var pointer = rdiff.applyDiff(pointer, diff);
+    if (pointer === undefined) {
+        res.status(400).json("invalid change operation: applying this change makes this item undefined ");
+        return;
+    }
+    write_data([...data.filter(([id, type, value]) => id !== item_id), pointer]);
     res.end();
 });
 app.post("/files", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
@@ -98,20 +116,25 @@ var io = new Server(server, {
     },
     maxHttpBufferSize: 16e6,
 });
-function sync_clients() {
+function sync_subscriptions() {
     var data = read_data();
     for (var i = 0; i < ws_clients.length; i++) {
-        if (data !== ws_clients[i].cached_content) {
-            ws_clients[i].socket.emit("data", rdiff.getDiff(ws_clients[i].cached_content, data));
-            ws_clients[i].cached_content = data;
+        var pointer_to_subscribed_item = ws_clients[i].subscribed_item === "*"
+            ? data
+            : data.find(([id, type, value]) => id === ws_clients[i].subscribed_item);
+        if (pointer_to_subscribed_item !== ws_clients[i].cached_content) {
+            ws_clients[i].socket.emit("data", rdiff.getDiff(ws_clients[i].cached_content, pointer_to_subscribed_item));
+            ws_clients[i].cached_content = pointer_to_subscribed_item;
         }
     }
 }
 chokidar.watch(store_path).on("all", (event, path) => {
-    sync_clients();
+    sync_subscriptions();
 });
 io.on("connection", (socket) => {
-    ws_clients.push({ socket, cached_content: undefined });
-    sync_clients();
+    socket.on("subscribe_to_item", (subscribed_item) => {
+        ws_clients.push({ socket, cached_content: undefined, subscribed_item: subscribed_item });
+        sync_subscriptions();
+    });
 });
 server.listen(8000);
